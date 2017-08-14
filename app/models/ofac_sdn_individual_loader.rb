@@ -15,11 +15,11 @@ class OfacSdnIndividualLoader
   #Loads the most recent file from http://www.treas.gov/offices/enforcement/ofac/sdn/delimit/index.shtml
   def self.load_current_sdn_file
     puts "Reloading OFAC sdn data"
-    puts "Downloading OFAC data from http://www.treas.gov/offices/enforcement/ofac/sdn"
-    yield "Downloading OFAC data from http://www.treas.gov/offices/enforcement/ofac/sdn" if block_given?
+    puts "Downloading OFAC data from https://www.treas.gov/offices/enforcement/ofac/sdn"
+    yield "Downloading OFAC data from https://www.treas.gov/offices/enforcement/ofac/sdn" if block_given?
     #get the 3 data files
     sdn = Tempfile.new('sdn')
-    uri = URI.parse('http://www.treasury.gov/ofac/downloads/sdn.pip')
+    uri = URI.parse('https://www.treasury.gov/ofac/downloads/sdn.pip')
     proxy_addr, proxy_port = ENV['http_proxy'].gsub("http://", "").split(/:/) if ENV['http_proxy']
 
     bytes = sdn.write(Net::HTTP::Proxy(proxy_addr, proxy_port).get(uri))
@@ -32,10 +32,10 @@ class OfacSdnIndividualLoader
       sdn.rewind
     end
     address = Tempfile.new('sdn')
-    address.write(Net::HTTP::Proxy(proxy_addr, proxy_port).get(URI.parse('http://www.treasury.gov/ofac/downloads/add.pip')))
+    address.write(Net::HTTP::Proxy(proxy_addr, proxy_port).get(URI.parse('https://www.treasury.gov/ofac/downloads/add.pip')))
     address.rewind
     alt = Tempfile.new('sdn')
-    alt.write(Net::HTTP::Proxy(proxy_addr, proxy_port).get(URI.parse('http://www.treasury.gov/ofac/downloads/alt.pip')))
+    alt.write(Net::HTTP::Proxy(proxy_addr, proxy_port).get(URI.parse('https://www.treasury.gov/ofac/downloads/alt.pip')))
     alt.rewind
 
     if (defined?(ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter) && OfacSdnIndividual.connection.kind_of?(ActiveRecord::ConnectionAdapters::AbstractMysqlAdapter)) || (defined?(ActiveRecord::ConnectionAdapters::JdbcAdapter) && OfacSdnIndividual.connection.kind_of?(ActiveRecord::ConnectionAdapters::JdbcAdapter))
@@ -103,11 +103,14 @@ class OfacSdnIndividualLoader
   end
 
   def self.sdn_text_to_hash(line)
-    if line.present?
+    if line.nil?
       value_array = convert_line_to_array(line)
       if value_array[2] == 'individual' # sdn_type
         last_name, first_name = value_array[1].to_s.split(',')
         last_name.try(:gsub!, /[[:punct:]]/, '')
+      elsif 
+        last_name = value_array[1].try(:gsub, /[[:punct:]]/, '')
+      end
         first_name1, first_name2, first_name3, first_name4, first_name5, first_name6, first_name7, first_name8 = first_name.try(:gsub, /[[:punct:]]/, '').try(:split, ' ')
         nationality_match = line.match(/[n|N]ationality [a-zA-Z]*/)
         nationality = nationality_match.nil? ? '' : nationality_match[0].split(' ')[1]
@@ -123,7 +126,7 @@ class OfacSdnIndividualLoader
          first_name_8: Array(first_name8).first.try(:upcase),
          nationality: nationality
         }
-      end
+      #end
     end
   end
 
@@ -131,9 +134,9 @@ class OfacSdnIndividualLoader
     unless line.nil?
       value_array = convert_line_to_array(line)
       {:id => value_array[0],
-       :address => value_array[2].try(:upcase),
-       :city => value_array[3].try(:upcase),
-       :country => value_array[4].try(:upcase)
+       :address => value_array[2].try(:gsub, /[[:punct:]]/, '').try(:upcase),
+       :city => value_array[3].try(:gsub, /[[:punct:]]/, '').try(:upcase),
+       :country => value_array[4].try(:gsub, /[[:punct:]]/, '').try(:upcase)
       }
     end
   end
@@ -332,7 +335,5 @@ class OfacSdnIndividualLoader
     OfacSdnIndividual.connection.execute(mysql_command)
     puts "Mysql import complete."
     yield "Mysql import complete." if block_given?
-
   end
-
 end
